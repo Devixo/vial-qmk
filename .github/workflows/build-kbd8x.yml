@@ -1,4 +1,5 @@
 name: Build KBD8X-MKII Vial yeaahbac bodela
+
 on:
   workflow_dispatch:
   push:
@@ -16,6 +17,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install QMK CLI
+        run: |
+          python3 -m pip install --break-system-packages qmk -r requirements.txt || python3 -m pip install qmk -r requirements.txt
+          export PATH="/usr/local/bin:$HOME/.local/bin:/root/.local/bin:$PATH"
+          qmk hello
+
       - name: Prepare Vial keymap for KBD8X-MKII
         run: |
           git config --global --add safe.directory '*'
@@ -32,12 +39,9 @@ jobs:
           cat << 'EOF' > "$VIAL_DIR/rules.mk"
           VIA_ENABLE = yes
           VIAL_ENABLE = yes
-          VIALRGB_ENABLE = no
           LTO_ENABLE = yes
-          TAP_DANCE_ENABLE = yes
-          COMBO_ENABLE = no
-          KEY_OVERRIDE_ENABLE = no
           QMK_SETTINGS = no
+          VIAL_KEY_OVERRIDE_ENABLE = no
           SPACE_CADET_ENABLE = no
           GRAVE_ESC_ENABLE = no
           MAGIC_ENABLE = no
@@ -51,59 +55,27 @@ jobs:
           #define VIAL_UNLOCK_COMBO_ROWS { 0, 2 }
           #define VIAL_UNLOCK_COMBO_COLS { 0, 13 }
           #define VIAL_TAP_DANCE_ENTRIES 8
+          #define VIAL_COMBO_ENTRIES 8
           #define DYNAMIC_KEYMAP_LAYER_COUNT 4
           EOF
 
           python3 - << 'PYEOF'
           import json, urllib.request
 
-          urls = [
-              "https://raw.githubusercontent.com/vial-kb/vial-gui/master/src/main/resources/base/via_keyboard_stack.json",
-              "https://raw.githubusercontent.com/the-via/keyboards/master/src/kbdfans/kbd8x_mk2/kbd8x_mk2.json"
-          ]
-
-          target = None
-          for url in urls:
-              try:
-                  req = urllib.request.urlopen(url)
-                  data = json.loads(req.read().decode("utf-8"))
-                  if "definitions" in data:
-                      for k, v in data["definitions"].items():
-                          if "kbd8x" in v.get("name", "").lower():
-                              target = v
-                              break
-                  elif "layouts" in data:
-                      target = data
-                  if target:
-                      break
-              except Exception as e:
-                  print("Pominięto URL:", url, e)
-
-          if not target:
-              raise RuntimeError("Nie udało się pobrać definicji układu KBD8X-MKII")
+          url = "https://raw.githubusercontent.com/the-via/keyboards/master/src/kbdfans/kbd8x_mk2/kbd8x_mk2.json"
+          req = urllib.request.urlopen(url)
+          data = json.loads(req.read().decode("utf-8"))
 
           with open("keyboards/kbdfans/kbd8x_mk2/keymaps/vial/vial.json", "w", encoding="utf-8") as f:
-              json.dump(target, f, indent=2)
-          print("Pomyślnie zapisano vial.json dla:", target.get("name", "KBD8X-MKII"))
+              json.dump(data, f, indent=2)
+          print("Pomyślnie zapisano vial.json dla:", data.get("name", "KBD8X-MKII"))
           PYEOF
 
       - name: Compile Vial Firmware
         run: |
+          export PATH="/usr/local/bin:$HOME/.local/bin:/root/.local/bin:$PATH"
           if ! make kbdfans/kbd8x_mk2:vial; then
-            cat << 'EOF' >> keyboards/kbdfans/kbd8x_mk2/keymaps/vial/config.h
-          #undef RGBLIGHT_ANIMATIONS
-          #undef RGBLIGHT_EFFECT_BREATHING
-          #undef RGBLIGHT_EFFECT_RAINBOW_MOOD
-          #undef RGBLIGHT_EFFECT_RAINBOW_SWIRL
-          #undef RGBLIGHT_EFFECT_SNAKE
-          #undef RGBLIGHT_EFFECT_KNIGHT
-          #undef RGBLIGHT_EFFECT_CHRISTMAS
-          #undef RGBLIGHT_EFFECT_STATIC_GRADIENT
-          #undef RGBLIGHT_EFFECT_RGB_TEST
-          #undef RGBLIGHT_EFFECT_ALTERNATING
-          #undef RGBLIGHT_EFFECT_TWINKLE
-          #define NO_ACTION_ONESHOT
-          EOF
+            printf "\n#undef RGBLIGHT_ANIMATIONS\n#define NO_ACTION_ONESHOT\n" >> keyboards/kbdfans/kbd8x_mk2/keymaps/vial/config.h
             make kbdfans/kbd8x_mk2:vial
           fi
 
