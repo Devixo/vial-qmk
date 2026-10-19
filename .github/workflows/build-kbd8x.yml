@@ -1,4 +1,4 @@
-name: Build KBD8X-MKII Vial yeaahbac bodela
+name: Build KBD8X-MKII Vial yeeahbac bodela
 
 on:
   workflow_dispatch:
@@ -17,8 +17,9 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install QMK CLI
+      - name: Install AVR Toolchain & QMK CLI
         run: |
+          apt-get update && apt-get install -y gcc-avr binutils-avr avr-libc
           python3 -m pip install --break-system-packages qmk -r requirements.txt || python3 -m pip install qmk -r requirements.txt
           export PATH="/usr/local/bin:$HOME/.local/bin:/root/.local/bin:$PATH"
           qmk hello
