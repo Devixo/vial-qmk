@@ -1,5 +1,4 @@
-name: Build KBD8X-MKII Vial
-
+name: Build KBD8X-MKII Vial yeaahbac bodela
 on:
   workflow_dispatch:
   push:
@@ -24,65 +23,87 @@ jobs:
           VIAL_DIR="$KB_DIR/keymaps/vial"
           mkdir -p "$VIAL_DIR"
 
-          # Kopiowanie bazowej mapy klawiszy z profilu via lub default
           if [ -d "$KB_DIR/keymaps/via" ]; then
             cp -r "$KB_DIR/keymaps/via/"* "$VIAL_DIR/"
           else
             cp -r "$KB_DIR/keymaps/default/"* "$VIAL_DIR/"
           fi
 
-          # Konfiguracja rules.mk z optymalizacją rozmiaru dla ATmega32U4
           cat << 'EOF' > "$VIAL_DIR/rules.mk"
           VIA_ENABLE = yes
           VIAL_ENABLE = yes
+          VIALRGB_ENABLE = no
           LTO_ENABLE = yes
           TAP_DANCE_ENABLE = yes
-          COMBO_ENABLE = yes
+          COMBO_ENABLE = no
           KEY_OVERRIDE_ENABLE = no
           QMK_SETTINGS = no
           SPACE_CADET_ENABLE = no
           GRAVE_ESC_ENABLE = no
           MAGIC_ENABLE = no
+          CONSOLE_ENABLE = no
+          COMMAND_ENABLE = no
           EOF
 
-          # Konfiguracja config.h (UID oraz skrót odblokowania Esc + Enter)
           cat << 'EOF' > "$VIAL_DIR/config.h"
           #pragma once
           #define VIAL_KEYBOARD_UID {0x4B, 0x42, 0x44, 0x38, 0x58, 0x4D, 0x4B, 0x32}
           #define VIAL_UNLOCK_COMBO_ROWS { 0, 2 }
           #define VIAL_UNLOCK_COMBO_COLS { 0, 13 }
           #define VIAL_TAP_DANCE_ENTRIES 8
-          #define VIAL_COMBO_ENTRIES 8
           #define DYNAMIC_KEYMAP_LAYER_COUNT 4
           EOF
 
-          # Pobranie definicji układu KBDFans KBD8X-MKII z bazy Vial GUI
           python3 - << 'PYEOF'
           import json, urllib.request
 
-          url = "https://raw.githubusercontent.com/vial-kb/vial-gui/main/src/main/resources/base/via_keyboard_stack.json"
-          req = urllib.request.urlopen(url)
-          data = json.loads(req.read().decode("utf-8"))
+          urls = [
+              "https://raw.githubusercontent.com/vial-kb/vial-gui/master/src/main/resources/base/via_keyboard_stack.json",
+              "https://raw.githubusercontent.com/the-via/keyboards/master/src/kbdfans/kbd8x_mk2/kbd8x_mk2.json"
+          ]
 
           target = None
-          for k, v in data.get("definitions", {}).items():
-              if "kbd8x" in v.get("name", "").lower() and "mkii" in v.get("name", "").lower():
-                  target = v
-                  break
+          for url in urls:
+              try:
+                  req = urllib.request.urlopen(url)
+                  data = json.loads(req.read().decode("utf-8"))
+                  if "definitions" in data:
+                      for k, v in data["definitions"].items():
+                          if "kbd8x" in v.get("name", "").lower():
+                              target = v
+                              break
+                  elif "layouts" in data:
+                      target = data
+                  if target:
+                      break
+              except Exception as e:
+                  print("Pominięto URL:", url, e)
 
           if not target:
-              raise RuntimeError("Nie znaleziono definicji KBD8X-MKII w via_keyboard_stack.json")
+              raise RuntimeError("Nie udało się pobrać definicji układu KBD8X-MKII")
 
           with open("keyboards/kbdfans/kbd8x_mk2/keymaps/vial/vial.json", "w", encoding="utf-8") as f:
               json.dump(target, f, indent=2)
-          print("Pomyślnie wygenerowano vial.json dla:", target.get("name"))
+          print("Pomyślnie zapisano vial.json dla:", target.get("name", "KBD8X-MKII"))
           PYEOF
 
       - name: Compile Vial Firmware
         run: |
-          make git-submodule
           if ! make kbdfans/kbd8x_mk2:vial; then
-            echo "#undef RGBLIGHT_ANIMATIONS" >> keyboards/kbdfans/kbd8x_mk2/keymaps/vial/config.h
+            cat << 'EOF' >> keyboards/kbdfans/kbd8x_mk2/keymaps/vial/config.h
+          #undef RGBLIGHT_ANIMATIONS
+          #undef RGBLIGHT_EFFECT_BREATHING
+          #undef RGBLIGHT_EFFECT_RAINBOW_MOOD
+          #undef RGBLIGHT_EFFECT_RAINBOW_SWIRL
+          #undef RGBLIGHT_EFFECT_SNAKE
+          #undef RGBLIGHT_EFFECT_KNIGHT
+          #undef RGBLIGHT_EFFECT_CHRISTMAS
+          #undef RGBLIGHT_EFFECT_STATIC_GRADIENT
+          #undef RGBLIGHT_EFFECT_RGB_TEST
+          #undef RGBLIGHT_EFFECT_ALTERNATING
+          #undef RGBLIGHT_EFFECT_TWINKLE
+          #define NO_ACTION_ONESHOT
+          EOF
             make kbdfans/kbd8x_mk2:vial
           fi
 
